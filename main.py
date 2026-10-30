@@ -152,7 +152,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/info — Informations sur le bot\n"
         "/rules — Règles d'utilisation\n"
         "/contact — Contacter le développeur\n\n"
-        "🔐 Commandes administrateur : /admin et /stats"
+        "🔐 Commandes administrateur : /admin et /stats\n"        "🛡️ Modération groupe : /ban et /unban (répondre au message ou fournir un ID)"
     )
     await update.effective_message.reply_text(text, parse_mode="HTML")
 
@@ -232,7 +232,95 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+async def moderation_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retourne (chat_id, cible_id, erreur). Cible par réponse ou ID numérique."""
+    message = update.effective_message
+    chat = update.effective_chat
+    if not chat or chat.type not in ("group", "supergroup"):
+        return None, None, "Cette commande fonctionne uniquement dans un groupe."
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_id = message.reply_to_message.from_user.id
+    elif context.args and context.args[0].lstrip("-").isdigit():
+        target_id = int(context.args[0])
+    else:
+        return chat.id, None, "Réponds au message de la personne ou indique son ID numérique. Exemple : /ban 123456789"
+    return chat.id, target_id, None
+
+
+async def check_moderator_rights(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    chat = update.effective_chat
+    actor = update.effective_user
+    message = update.effective_message
+    if not chat or not actor or not message:
+        return False
+    try:
+        actor_member = await context.bot.get_chat_member(chat.id, actor.id)
+        if actor_member.status not in ("administrator", "creator"):
+            await message.reply_text("⛔ Seuls les administrateurs du groupe peuvent utiliser cette commande.")
+            return False
+        bot_member = await context.bot.get_chat_member(chat.id, context.bot.id)
+        if bot_member.status != "administrator" or not getattr(bot_member, "can_restrict_members", False):
+            await message.reply_text("⚠️ Je dois être administrateur du groupe avec le droit « Bannir des utilisateurs ».")
+            return False
+        return True
+    except Exception:
+        logger.exception("Vérification des droits de modération impossible")
+        await message.reply_text("⚠️ Impossible de vérifier les droits. Vérifie que je suis administrateur du groupe.")
+        return False
+
+
+async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id, target_id, error = await moderation_target(update, context)
+    if error:
+        await update.effective_message.reply_text("⚠️ " + error)
+        return
+    if not await check_moderator_rights(update, context):
+        return
+    if target_id == context.bot.id:
+        await update.effective_message.reply_text("Je ne peux pas me bannir moi-même.")
+        return
+    if target_id in ADMIN_IDS:
+        await update.effective_message.reply_text("⛔ Cette personne est protégée comme administrateur du bot.")
+        return
+    try:
+        target = await context.bot.get_chat_member(chat_id, target_id)
+        if target.status in ("administrator", "creator"):
+            await update.effective_message.reply_text("⛔ Impossible de bannir un administrateur ou le propriétaire du groupe.")
+            return
+        reason = " ".join(context.args[1:]).strip() if context.args and context.args[0].lstrip("-").isdigit() else ""
+        await context.bot.ban_chat_member(chat_id=chat_id, user_id=target_id)
+        await update.effective_message.reply_text(
+            f"🔨 Utilisateur <code>{target_id}</code> banni du groupe."
+            + (f"\nMotif : {reason}" if reason else ""),
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.exception("Échec de /ban")
+        await update.effective_message.reply_text("⚠️ Bannissement impossible. Vérifie mes droits et l'ID de la personne.")
+
+
+async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id, target_id, error = await moderation_target(update, context)
+    if error:
+        await update.effective_message.reply_text("⚠️ " + error)
+        return
+    if not await check_moderator_rights(update, context):
+        return
+    if target_id == context.bot.id:
+        await update.effective_message.reply_text("Cette action n'est pas nécessaire pour le bot.")
+        return
+    try:
+        await context.bot.unban_chat_member(chat_id=chat_id, user_id=target_id, only_if_banned=True)
+        await update.effective_message.reply_text(
+            f"♻️ Bannissement levé pour l'utilisateur <code>{target_id}</code>.\n"
+            "Il peut rejoindre le groupe à nouveau via son lien d'invitation.",
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.exception("Échec de /unban")
+        await update.effective_message.reply_text("⚠️ Débannissement impossible. Vérifie l'ID et mes droits.")
+\n\nasync def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     responses = {
@@ -279,7 +367,7 @@ def main() -> None:
     app.add_handler(CommandHandler("rules", rules))
     app.add_handler(CommandHandler("contact", contact))
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("stats", stats))\n    app.add_handler(CommandHandler("ban", ban_command))\n    app.add_handler(CommandHandler("unban", unban_command))
     app.add_handler(CallbackQueryHandler(button_router))
     app.add_error_handler(error_handler)
 
