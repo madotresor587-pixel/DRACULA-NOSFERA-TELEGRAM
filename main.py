@@ -167,7 +167,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/rules — Règles d'utilisation\n"
         "/contact — Contacter le développeur\n\n"
         "🔐 Commandes administrateur : /admin et /stats\n"
-        "🦇 Mode narratif : /massreport NUMERO [NOMBRE], /banpem NUMERO [NOMBRE], /banperm NUMERO [NOMBRE], /bantemp NUMERO [DUREE]\n"
+        "🦇 Mode démonstration : /massreport NUMERO [NOMBRE], /bantemp NUMERO [DUREE]\n"
         "✉️ Recours WhatsApp : /unban NUMERO [EXPLICATION]\n"
         "👥 Débannir un membre Telegram : /unban_group (répondre à son message ou donner son ID)\n"
     )
@@ -202,10 +202,30 @@ async def gemini_generate(contents: list[dict[str, str]]) -> str:
 
     def request():
         req = urllib.request.Request(
-            url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": GEMINI_API_KEY,
+            },
+            method="POST",
         )
-        with urllib.request.urlopen(req, timeout=35) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req, timeout=45) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            # Ne jamais journaliser l'URL : elle peut contenir des informations sensibles.
+            detail = exc.read().decode("utf-8", errors="replace")
+            try:
+                parsed = json.loads(detail)
+                detail = parsed.get("error", {}).get("message", detail)
+            except Exception:
+                pass
+            raise RuntimeError(f"Gemini HTTP {exc.code}: {str(detail)[:700]}") from None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            raise RuntimeError("Réponse invalide du service Gemini.") from None
 
     result = await asyncio.to_thread(request)
     candidates = result.get("candidates") or []
@@ -245,12 +265,13 @@ async def ia_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         ])
         AI_HISTORY[user.id] = history[-8:]
         await wait.edit_text("🧛 <b>DRACULA NOSFERA IA</b>\\n\\n" + html.escape(answer), parse_mode="HTML")
-    except urllib.error.HTTPError as exc:
-        logger.warning("Gemini HTTP %s", exc.code)
-        await wait.edit_text("⚠️ Le service IA a refusé la demande. Vérifie la clé API, les quotas et le modèle configuré.")
-    except Exception:
-        logger.exception("Erreur Gemini")
-        await wait.edit_text("⚠️ Impossible de joindre l'IA pour le moment. Réessaie un peu plus tard.")
+    except Exception as exc:
+        logger.exception("Échec de /ia : %s", str(exc)[:700])
+        await wait.edit_text(
+            "⚠️ L'IA n'a pas pu répondre. Vérifie dans FadeHost que GEMINI_API_KEY "
+            "est valide, que l'API Gemini est activée et que le quota est disponible. "
+            "Consulte les logs pour le détail technique."
+        )
 
 
 async def clear_ia_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -328,12 +349,12 @@ async def conversational_ai(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await message.reply_text(answer[:4000])
         if STICKER_CACHE and random.random() < 0.18:
             await send_random_sticker(message, context)
-    except urllib.error.HTTPError as exc:
-        logger.warning("Gemini HTTP %s", exc.code)
-        await message.reply_text("⚠️ Je rencontre un problème avec mon service IA. Réessaie plus tard.")
-    except Exception:
-        logger.exception("Erreur de conversation IA")
-        await message.reply_text("⚠️ Je n'arrive pas à répondre pour le moment. Réessaie dans un instant.")
+    except Exception as exc:
+        logger.exception("Échec de la conversation IA : %s", str(exc)[:700])
+        await message.reply_text(
+            "⚠️ L'IA est temporairement indisponible. L'administrateur doit vérifier "
+            "la clé Gemini, l'API activée, le quota et les logs FadeHost."
+        )
 
 
 async def sticker_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -771,8 +792,6 @@ async def set_bot_commands(app: Application) -> None:
         BotCommand("unban_group", "Débannir un membre du groupe"),
         BotCommand("unban", "Préparer un recours WhatsApp"),
         BotCommand("massreport", "Narrative sign — séquence de signalement"),
-        BotCommand("banpem", "Mode narratif Dracula"),
-        BotCommand("banperm", "Mode narratif Dracula"),
         BotCommand("bantemp", "Mode narratif Dracula"),
         BotCommand("check", "Consulter les informations de statut"),
         BotCommand("proxystats", "Afficher les proxies WhatsApp"),
@@ -802,12 +821,9 @@ def main() -> None:
     app.add_handler(CommandHandler("unban_group", unban_command))
     app.add_handler(CommandHandler("unban", unban_appeal_command))
     app.add_handler(CommandHandler("massreport", massreport_command))
-    app.add_handler(CommandHandler("banpem", banpem_command))
-    app.add_handler(CommandHandler("banperm", banperm_command))
     app.add_handler(CommandHandler("check", check_whatsapp_status))
     app.add_handler(CommandHandler("proxystats", proxystats_command))
     app.add_handler(CommandHandler("bantemp", bantemp_command))
-    app.add_handler(CommandHandler("unban_appeal", unban_appeal_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, conversational_ai))
     app.add_handler(MessageHandler(filters.CAPTION & ~filters.COMMAND, conversational_ai))
     app.add_handler(CallbackQueryHandler(button_router))
