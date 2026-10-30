@@ -293,9 +293,13 @@ async def conversational_ai(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     message = update.effective_message
     user = update.effective_user
     chat = update.effective_chat
-    if not message or not user or not chat or user.is_bot:
+    if not message or not chat:
+        return
+    if user and user.is_bot:
         return
     private = chat.type == "private"
+    if not user and chat.type != "channel":
+        return
     if not private and chat.type not in ("group", "supergroup", "channel"):
         return
     if not private and not message_mentions_bot(message, context.bot.username or ""):
@@ -311,7 +315,7 @@ async def conversational_ai(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not prompt:
         await message.reply_text("Je suis là. Écris-moi ta question après m'avoir identifié.")
         return
-    history_key = chat.id if private else (chat.id * 10_000_000 + user.id)
+    history_key = chat.id if private or chat.type == "channel" else (chat.id * 10_000_000 + user.id)
     history = AI_HISTORY.setdefault(history_key, [])
     contents = history[-8:] + [{"role": "user", "parts": [{"text": prompt[:5000]}]}]
     try:
