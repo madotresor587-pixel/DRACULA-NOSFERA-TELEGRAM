@@ -472,6 +472,19 @@ async def banperm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await run_report_simulation(update, context, "banperm")
 
 
+async def proxystats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.effective_message.reply_text(
+        "🧛 <b>DRACULA NOSFERA — PROXY WHATSAPP</b>\\n"
+        "━━━━━━━━━━━━━━━━━━\\n"
+        "Voici les deux adresses proxy fournies :\\n\\n"
+        "1. <code>202.6.205.24:20032</code>\\n"
+        "2. <code>202.6.205.24:20034</code>\\n\\n"
+        "📱 Dans WhatsApp, ouvre Paramètres → Stockage et données → Proxy → Configurer le proxy, puis saisis l'adresse et le port si cette option est disponible.\\n"
+        "⚠️ Ces adresses n'ont pas été vérifiées : leur disponibilité et leur fiabilité ne sont pas garanties. Un opérateur de proxy peut observer certaines métadonnées de connexion. Ne partage jamais ton code de vérification.",
+        parse_mode="HTML",
+    )
+
+
 async def check_whatsapp_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await update.effective_message.reply_text(
@@ -585,6 +598,7 @@ async def set_bot_commands(app: Application) -> None:
         BotCommand("banperm", "Simulation narrative"),
         BotCommand("bantemp", "Simulation narrative"),
         BotCommand("check", "Consulter les informations de statut"),
+        BotCommand("proxystats", "Afficher les proxies WhatsApp"),
     ]
     await app.bot.set_my_commands(commands)
 
@@ -611,6 +625,7 @@ def main() -> None:
     app.add_handler(CommandHandler("banpem", banpem_command))
     app.add_handler(CommandHandler("banperm", banperm_command))
     app.add_handler(CommandHandler("check", check_whatsapp_status))
+    app.add_handler(CommandHandler("proxystats", proxystats_command))
     app.add_handler(CommandHandler("bantemp", bantemp_command))
     app.add_handler(CommandHandler("unban_appeal", unban_appeal_command))
     app.add_handler(CallbackQueryHandler(button_router))
