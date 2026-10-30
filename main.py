@@ -5,6 +5,9 @@ import os
 import random
 import sqlite3
 import time
+import json
+import urllib.request
+import urllib.error
 from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +26,9 @@ STARTED_AT = time.monotonic()
 BOT_NAME = os.getenv("BOT_NAME", "DRACULA NOSFERA")
 DEVELOPER = os.getenv("BOT_DEVELOPER", "MADO DEV")
 CONTACT = os.getenv("BOT_CONTACT", "@MadoPhantomAI")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+AI_HISTORY: dict[int, list[dict[str, str]]] = {}
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -162,6 +168,90 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "👥 Débannir un membre Telegram : /unban_group (répondre à son message ou donner son ID)\n"
     )
     await update.effective_message.reply_text(text, parse_mode="HTML")
+
+
+
+async def gemini_generate(contents: list[dict[str, str]]) -> str:
+    """Appelle Gemini sans jamais stocker la clé dans le dépôt."""
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    )
+    payload = {
+        "system_instruction": {
+            "parts": [{
+                "text": (
+                    "Tu es Dracula Nosfera, une IA Telegram intelligente, "
+                    "utile, respectueuse et concise. Réponds dans la langue "
+                    "de l'utilisateur. N'invente pas de faits et protège les "
+                    "informations personnelles."
+                )
+            }]
+        },
+        "contents": contents,
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 900},
+    }
+    data = json.dumps(payload).encode("utf-8")
+
+    def request():
+        req = urllib.request.Request(
+            url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=35) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    result = await asyncio.to_thread(request)
+    candidates = result.get("candidates") or []
+    parts = (candidates[0].get("content", {}).get("parts", []) if candidates else [])
+    answer = "".join(part.get("text", "") for part in parts).strip()
+    if not answer:
+        raise RuntimeError("Gemini n'a pas retourné de texte.")
+    return answer[:3900]
+
+
+async def ia_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    user = update.effective_user
+    if not message or not user:
+        return
+    if not GEMINI_API_KEY:
+        await message.reply_text(
+            "🧛 L'IA n'est pas encore configurée. L'administrateur doit ajouter "
+            "GEMINI_API_KEY dans les variables d'environnement de l'hébergement."
+        )
+        return
+    prompt = " ".join(context.args).strip()
+    if not prompt and message.reply_to_message and message.reply_to_message.text:
+        prompt = message.reply_to_message.text.strip()
+    if not prompt:
+        await message.reply_text("Utilisation : /ia ta question")
+        return
+
+    history = AI_HISTORY.setdefault(user.id, [])
+    contents = history[-8:] + [{"role": "user", "parts": [{"text": prompt[:5000]}]}]
+    wait = await message.reply_text("🧠 Dracula Nosfera réfléchit…")
+    try:
+        answer = await gemini_generate(contents)
+        history.extend([
+            {"role": "user", "parts": [{"text": prompt[:5000]}]},
+            {"role": "model", "parts": [{"text": answer}]},
+        ])
+        AI_HISTORY[user.id] = history[-8:]
+        await wait.edit_text("🧛 <b>DRACULA NOSFERA IA</b>\\n\\n" + html.escape(answer), parse_mode="HTML")
+    except urllib.error.HTTPError as exc:
+        logger.warning("Gemini HTTP %s", exc.code)
+        await wait.edit_text("⚠️ Le service IA a refusé la demande. Vérifie la clé API, les quotas et le modèle configuré.")
+    except Exception:
+        logger.exception("Erreur Gemini")
+        await wait.edit_text("⚠️ Impossible de joindre l'IA pour le moment. Réessaie un peu plus tard.")
+
+
+async def clear_ia_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    if user:
+        AI_HISTORY.pop(user.id, None)
+    await update.effective_message.reply_text("🧠 Mémoire de conversation IA réinitialisée.")
+
 
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -577,6 +667,8 @@ async def set_bot_commands(app: Application) -> None:
         BotCommand("start", "Démarrer le bot"),
         BotCommand("menu", "Ouvrir le menu principal"),
         BotCommand("help", "Afficher les commandes disponibles"),
+        BotCommand("ia", "Parler à l’intelligence artificielle"),
+        BotCommand("clear_ia", "Effacer la mémoire de discussion IA"),
         BotCommand("ping", "Vérifier si le bot est en ligne"),
         BotCommand("id", "Afficher ton identifiant Telegram"),
         BotCommand("info", "Informations sur le bot"),
@@ -605,6 +697,8 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("ia", ia_command))
+    app.add_handler(CommandHandler("clear_ia", clear_ia_command))
     app.add_handler(CommandHandler("ping", ping))
     app.add_handler(CommandHandler("id", user_id))
     app.add_handler(CommandHandler("info", about))
