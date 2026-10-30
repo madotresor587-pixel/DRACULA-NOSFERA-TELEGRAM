@@ -462,7 +462,8 @@ async def bantemp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"📱 Cible : <code>{html.escape(phone)}</code>\\n"
         f"⏳ Durée affichée : <b>{html.escape(duration)}</b>\\n"
         "🌑 Rituel terminé !\\n"
-        "ℹ️ Résultat décoratif : aucune restriction WhatsApp n'a été appliquée.",
+        "🩸 Ta vie est désormais entre les mains du roi Meta WhatsApp !\\n"
+        "ℹ️ Mise en scène humoristique : aucun bannissement réel n'a été effectué.",
         parse_mode="HTML",
     )
 
