@@ -157,7 +157,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/rules — Règles d'utilisation\n"
         "/contact — Contacter le développeur\n\n"
         "🔐 Commandes administrateur : /admin et /stats\n"
-        "🧪 Simulations : /massreport NUMERO [NOMBRE], /banpem NUMERO [NOMBRE], /bantemp NUMERO [DUREE]\n"
+        "🦇 Mode narratif : /massreport NUMERO [NOMBRE], /banpem NUMERO [NOMBRE], /banperm NUMERO [NOMBRE], /bantemp NUMERO [DUREE]\n"
         "✉️ Recours WhatsApp : /unban NUMERO [EXPLICATION]\n"
         "👥 Débannir un membre Telegram : /unban_group (répondre à son message ou donner son ID)\n"
     )
@@ -338,7 +338,7 @@ def normalize_phone(raw: str) -> str | None:
     return "+" + value
 
 
-async def run_report_simulation(update: Update, context: ContextTypes.DEFAULT_TYPE, label: str) -> None:
+async def run_narrative_sequence(update: Update, context: ContextTypes.DEFAULT_TYPE, label: str) -> None:
     message = update.effective_message
     if not context.args:
         await message.reply_text(
@@ -418,11 +418,11 @@ async def run_report_simulation(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def massreport_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await run_report_simulation(update, context, "massreport")
+    await run_narrative_sequence(update, context, "massreport")
 
 
 async def banpem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await run_report_simulation(update, context, "banpem")
+    await run_narrative_sequence(update, context, "banpem")
 
 
 async def bantemp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -470,7 +470,7 @@ async def bantemp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def banperm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await run_report_simulation(update, context, "banperm")
+    await run_narrative_sequence(update, context, "banperm")
 
 
 async def proxystats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -587,10 +587,10 @@ async def set_bot_commands(app: Application) -> None:
         BotCommand("ban", "Bannir un membre du groupe"),
         BotCommand("unban_group", "Débannir un membre du groupe"),
         BotCommand("unban", "Préparer un recours WhatsApp"),
-        BotCommand("massreport", "Simulation narrative de signalement"),
-        BotCommand("banpem", "Simulation narrative"),
-        BotCommand("banperm", "Simulation narrative"),
-        BotCommand("bantemp", "Simulation narrative"),
+        BotCommand("massreport", "Narrative sign — séquence de signalement"),
+        BotCommand("banpem", "Mode narratif Dracula"),
+        BotCommand("banperm", "Mode narratif Dracula"),
+        BotCommand("bantemp", "Mode narratif Dracula"),
         BotCommand("check", "Consulter les informations de statut"),
         BotCommand("proxystats", "Afficher les proxies WhatsApp"),
     ]
