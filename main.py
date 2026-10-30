@@ -320,7 +320,9 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception:
         logger.exception("Échec de /unban")
         await update.effective_message.reply_text("⚠️ Débannissement impossible. Vérifie l'ID et mes droits.")
-\n\nasync def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+
+async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     responses = {
