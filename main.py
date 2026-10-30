@@ -411,7 +411,7 @@ async def run_report_simulation(update: Update, context: ContextTypes.DEFAULT_TY
         f"📊 Compteur : <b>{count}/{count}</b>\\n"
         "🌑 Rituel terminé !\\n"
         "━━━━━━━━━━━━━━━━━━\\n"
-        "ℹ️ Résultat décoratif : aucun signalement ni bannissement WhatsApp n'a été effectué.",
+        "🦇 Mise en scène terminée : toute décision appartient à WhatsApp.",
         parse_mode="HTML",
     )
 
