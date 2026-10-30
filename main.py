@@ -211,7 +211,7 @@ async def gemini_generate(contents: list[dict[str, str]]) -> str:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=45) as response:
+            with urllib.request.urlopen(req, timeout=120) as response:
                 raw = response.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as exc:
             # Ne jamais journaliser l'URL : elle peut contenir des informations sensibles.
@@ -227,7 +227,11 @@ async def gemini_generate(contents: list[dict[str, str]]) -> str:
         except json.JSONDecodeError:
             raise RuntimeError("Réponse invalide du service Gemini.") from None
 
-    result = await asyncio.to_thread(request)
+    try:
+        result = await asyncio.to_thread(request)
+    except TimeoutError:
+        logger.warning("Gemini: délai de réponse dépassé après 120 secondes (modèle=%s)", GEMINI_MODEL)
+        raise RuntimeError("Gemini met trop de temps à répondre. Vérifie le modèle et la disponibilité du service.") from None
     candidates = result.get("candidates") or []
     parts = (candidates[0].get("content", {}).get("parts", []) if candidates else [])
     answer = "".join(part.get("text", "") for part in parts).strip()
