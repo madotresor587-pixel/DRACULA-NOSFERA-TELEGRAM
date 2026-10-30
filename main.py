@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 import os
 import sqlite3
@@ -157,6 +158,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "🔐 Commandes administrateur : /admin et /stats\n"
         "🧪 Simulations : /massreport NUMERO [NOMBRE], /banpem NUMERO [NOMBRE], /bantemp NUMERO [DUREE]\n"
         "✉️ Recours WhatsApp : /unban NUMERO [EXPLICATION]\n"
+        "👥 Débannir un membre Telegram : /unban_group (répondre à son message ou donner son ID)\n"
     )
     await update.effective_message.reply_text(text, parse_mode="HTML")
 
@@ -436,7 +438,7 @@ async def unban_appeal_command(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.effective_message.reply_text(
         "✉️ <b>Projet de recours préparé</b>\n\n"
         f"<b>Objet :</b> {subject}\n\n"
-        f"<b>Message :</b>\n{body}\n\n"
+        f"<b>Message :</b>\n{html.escape(body)}\n\n"
         "Ce texte n'a pas été envoyé. Pour un compte banni, WhatsApp recommande d'abord "
         "d'utiliser le bouton « Demander un examen » dans l'application. "
         "Tu peux aussi consulter le centre d'aide officiel : "
@@ -496,7 +498,8 @@ def main() -> None:
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("ban", ban_command))
-    app.add_handler(CommandHandler("unban", unban_command))
+    app.add_handler(CommandHandler("unban_group", unban_command))
+    app.add_handler(CommandHandler("unban", unban_appeal_command))
     app.add_handler(CommandHandler("massreport", massreport_command))
     app.add_handler(CommandHandler("banpem", banpem_command))
     app.add_handler(CommandHandler("bantemp", bantemp_command))
