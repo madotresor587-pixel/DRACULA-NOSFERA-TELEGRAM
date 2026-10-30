@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 import sqlite3
 import time
+from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -153,6 +155,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/rules — Règles d'utilisation\n"
         "/contact — Contacter le développeur\n\n"
         "🔐 Commandes administrateur : /admin et /stats\n"
+        "🧪 Simulations : /massreport NUMERO [NOMBRE], /banpem NUMERO [NOMBRE], /bantemp NUMERO [DUREE]\n"
+        "✉️ Recours WhatsApp : /unban NUMERO [EXPLICATION]\n"
     )
     await update.effective_message.reply_text(text, parse_mode="HTML")
 
@@ -322,6 +326,127 @@ async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.effective_message.reply_text("⚠️ Débannissement impossible. Vérifie l'ID et mes droits.")
 
 
+def normalize_phone(raw: str) -> str | None:
+    value = raw.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if value.startswith("+"):
+        value = value[1:]
+    if not value.isdigit() or not 8 <= len(value) <= 15:
+        return None
+    return "+" + value
+
+
+async def run_report_simulation(update: Update, context: ContextTypes.DEFAULT_TYPE, label: str) -> None:
+    message = update.effective_message
+    if not context.args:
+        await message.reply_text(f"Utilisation : /{label} NUMERO [NOMBRE]\nExemple : /{label} +2250700000000 500")
+        return
+    phone = normalize_phone(context.args[0])
+    if not phone:
+        await message.reply_text("Numéro invalide. Utilise le format international, par exemple +2250700000000.")
+        return
+    count = 500
+    if len(context.args) > 1:
+        try:
+            count = int(context.args[1])
+        except ValueError:
+            await message.reply_text("Le nombre doit être un entier entre 1 et 500.")
+            return
+    if not 1 <= count <= 500:
+        await message.reply_text("Choisis un nombre entre 1 et 500.")
+        return
+
+    status = await message.reply_text(
+        "🧪 <b>MODE SIMULATION — aucun signalement réel n'est envoyé</b>\n"
+        f"Numéro cible : <code>{phone}</code>\n"
+        f"Opération : {label.upper()}\nProgression : 0/{count}",
+        parse_mode="HTML",
+    )
+    for percent in (20, 40, 60, 80, 100):
+        await asyncio.sleep(0.35)
+        done = count * percent // 100
+        try:
+            await status.edit_text(
+                "🧪 <b>MODE SIMULATION — aucun signalement réel n'est envoyé</b>\n"
+                f"Numéro cible : <code>{phone}</code>\n"
+                f"Opération : {label.upper()}\n"
+                f"Progression : {done}/{count} ({percent}%)\n"
+                "Traitement fictif des étapes de démonstration…",
+                parse_mode="HTML",
+            )
+        except Exception:
+            logger.exception("Impossible de mettre à jour la progression de simulation")
+    await status.edit_text(
+        "✅ <b>Simulation terminée</b>\n"
+        f"Numéro : <code>{phone}</code>\n"
+        f"Compteur simulé : {count}/{count}\n"
+        "Aucun signalement n'a été transmis à WhatsApp et aucun compte n'a été banni.",
+        parse_mode="HTML",
+    )
+
+
+async def massreport_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await run_report_simulation(update, context, "massreport")
+
+
+async def banpem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await run_report_simulation(update, context, "banpem")
+
+
+async def bantemp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if len(context.args) < 2:
+        await update.effective_message.reply_text(
+            "Utilisation : /bantemp NUMERO DUREE\nExemple : /bantemp +2250700000000 24h"
+        )
+        return
+    phone = normalize_phone(context.args[0])
+    duration = context.args[1].strip()
+    if not phone or not (1 <= len(duration) <= 12) or not all(c.isalnum() for c in duration):
+        await update.effective_message.reply_text("Numéro ou durée invalide. Exemple : /bantemp +2250700000000 24h")
+        return
+    await update.effective_message.reply_text(
+        "🧪 <b>BANNISSEMENT TEMPORAIRE — SIMULATION</b>\n"
+        f"Numéro : <code>{phone}</code>\n"
+        f"Durée fictive : <b>{duration}</b>\n"
+        "Aucune restriction WhatsApp n'a été appliquée. Cette commande ne modifie aucun compte.",
+        parse_mode="HTML",
+    )
+
+
+async def unban_appeal_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        await update.effective_message.reply_text(
+            "Utilisation : /unban NUMERO [EXPLICATION]\n"
+            "Exemple : /unban +2250700000000 Mon compte semble avoir été bloqué par erreur."
+        )
+        return
+    phone = normalize_phone(context.args[0])
+    if not phone:
+        await update.effective_message.reply_text("Numéro invalide. Utilise le format international, par exemple +2250700000000.")
+        return
+    explanation = " ".join(context.args[1:]).strip() or "Je pense que le blocage de mon compte est une erreur."
+    subject = "Demande de réexamen de mon compte WhatsApp"
+    body = (
+        "Bonjour l'équipe WhatsApp,\n\n"
+        f"Mon numéro WhatsApp est : {phone}\n\n"
+        f"Explication : {explanation}\n\n"
+        "Je vous remercie de bien vouloir réexaminer mon compte. "
+        "Je reste disponible pour fournir les informations nécessaires.\n\n"
+        "Cordialement."
+    )
+    await update.effective_message.reply_text(
+        "✉️ <b>Projet de recours préparé</b>\n\n"
+        f"<b>Objet :</b> {subject}\n\n"
+        f"<b>Message :</b>\n{body}\n\n"
+        "Ce texte n'a pas été envoyé. Pour un compte banni, WhatsApp recommande d'abord "
+        "d'utiliser le bouton « Demander un examen » dans l'application. "
+        "Tu peux aussi consulter le centre d'aide officiel : "
+        '<a href="https://faq.whatsapp.com/465883178708358/?locale=fr_FR">À propos des bannissements</a> '
+        "ou le <a href=\"https://www.whatsapp.com/contact?subject=messenger\">formulaire officiel de contact</a>.",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+
 async def button_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -372,6 +497,10 @@ def main() -> None:
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("ban", ban_command))
     app.add_handler(CommandHandler("unban", unban_command))
+    app.add_handler(CommandHandler("massreport", massreport_command))
+    app.add_handler(CommandHandler("banpem", banpem_command))
+    app.add_handler(CommandHandler("bantemp", bantemp_command))
+    app.add_handler(CommandHandler("unban_appeal", unban_appeal_command))
     app.add_handler(CallbackQueryHandler(button_router))
     app.add_error_handler(error_handler)
 
