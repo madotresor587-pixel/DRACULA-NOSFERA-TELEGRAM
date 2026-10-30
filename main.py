@@ -179,7 +179,7 @@ async def gemini_generate(contents: list[dict[str, str]]) -> str:
     """Appelle Gemini sans jamais stocker la clé dans le dépôt."""
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+        f"{GEMINI_MODEL}:generateContent"
     )
     payload = {
         "system_instruction": {
