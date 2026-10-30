@@ -152,7 +152,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/info — Informations sur le bot\n"
         "/rules — Règles d'utilisation\n"
         "/contact — Contacter le développeur\n\n"
-        "🔐 Commandes administrateur : /admin et /stats\n"        "🛡️ Modération groupe : /ban et /unban (répondre au message ou fournir un ID)"
+        "🔐 Commandes administrateur : /admin et /stats\n"
     )
     await update.effective_message.reply_text(text, parse_mode="HTML")
 
@@ -369,7 +369,9 @@ def main() -> None:
     app.add_handler(CommandHandler("rules", rules))
     app.add_handler(CommandHandler("contact", contact))
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("stats", stats))\n    app.add_handler(CommandHandler("ban", ban_command))\n    app.add_handler(CommandHandler("unban", unban_command))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("ban", ban_command))
+    app.add_handler(CommandHandler("unban", unban_command))
     app.add_handler(CallbackQueryHandler(button_router))
     app.add_error_handler(error_handler)
 
