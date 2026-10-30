@@ -2,6 +2,7 @@ import asyncio
 import html
 import logging
 import os
+import random
 import sqlite3
 import time
 from urllib.parse import quote
@@ -473,22 +474,9 @@ async def banperm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def proxystats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    await message.reply_text(
-        "🧛 <b>DRACULA NOSFERA — PROXY 1/2</b>\\n"
-        "Appuie sur le texte pour le copier :\\n"
-        "<code>202.6.205.24:20032</code>",
-        parse_mode="HTML",
-    )
-    await message.reply_text(
-        "🧛 <b>DRACULA NOSFERA — PROXY 2/2</b>\\n"
-        "Appuie sur le texte pour le copier :\\n"
-        "<code>202.6.205.24:20034</code>",
-        parse_mode="HTML",
-    )
-    await message.reply_text(
-        "⚠️ Proxies fournis sans vérification. Leur disponibilité et leur fiabilité ne sont pas garanties."
-    )
+    # Envoie une seule adresse brute par demande pour faciliter le copier-coller.
+    proxy = random.choice(("202.6.205.24:20032", "202.6.205.24:20034"))
+    await update.effective_message.reply_text(proxy)
 
 
 async def check_whatsapp_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
