@@ -414,6 +414,34 @@ async def bantemp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
+async def banperm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await run_report_simulation(update, context, "banperm")
+
+
+async def check_whatsapp_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        await update.effective_message.reply_text(
+            "Utilisation : /check NUMERO\\nExemple : /check +2250700000000"
+        )
+        return
+    phone = normalize_phone(context.args[0])
+    if not phone:
+        await update.effective_message.reply_text(
+            "Numéro invalide. Utilise le format international, par exemple +2250700000000."
+        )
+        return
+    await update.effective_message.reply_text(
+        "🔎 <b>Vérification du numéro</b>\\n"
+        f"Numéro : <code>{phone}</code>\\n"
+        "⚪ <b>Statut : impossible à déterminer depuis Telegram</b>\\n\\n"
+        "WhatsApp ne fournit pas de service public permettant de vérifier le bannissement d'un compte à partir du seul numéro. "
+        "Pour connaître le statut réel, ouvre WhatsApp avec ce numéro : si un avis de bannissement apparaît, suis "
+        "« Demander un examen ». Si le compte s'ouvre normalement, aucun bannissement n'est signalé dans cette session. "
+        "Cette commande ne prétend pas effectuer une vérification réelle.",
+        parse_mode="HTML",
+    )
+
+
 async def unban_appeal_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await update.effective_message.reply_text(
@@ -502,6 +530,8 @@ def main() -> None:
     app.add_handler(CommandHandler("unban", unban_appeal_command))
     app.add_handler(CommandHandler("massreport", massreport_command))
     app.add_handler(CommandHandler("banpem", banpem_command))
+    app.add_handler(CommandHandler("banperm", banperm_command))
+    app.add_handler(CommandHandler("check", check_whatsapp_status))
     app.add_handler(CommandHandler("bantemp", bantemp_command))
     app.add_handler(CommandHandler("unban_appeal", unban_appeal_command))
     app.add_handler(CallbackQueryHandler(button_router))
