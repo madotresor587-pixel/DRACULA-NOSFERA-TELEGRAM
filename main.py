@@ -18,6 +18,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -28,7 +30,9 @@ DEVELOPER = os.getenv("BOT_DEVELOPER", "MADO DEV")
 CONTACT = os.getenv("BOT_CONTACT", "@MadoPhantomAI")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
-AI_HISTORY: dict[int, list[dict[str, str]]] = {}
+STICKER_SET_NAME = os.getenv("STICKER_SET_NAME", "").strip()
+STICKER_CACHE = []
+AI_HISTORY: dict[int, list[dict]] = {}
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -181,10 +185,13 @@ async def gemini_generate(contents: list[dict[str, str]]) -> str:
         "system_instruction": {
             "parts": [{
                 "text": (
-                    "Tu es Dracula Nosfera, une IA Telegram intelligente, "
-                    "utile, respectueuse et concise. Réponds dans la langue "
-                    "de l'utilisateur. N'invente pas de faits et protège les "
-                    "informations personnelles."
+                    "Tu es Dracula Nosfera, une IA conversationnelle intelligente, naturelle, "
+                    "utile, respectueuse et concise. Tu comprends et peux parler "
+                    "dans toutes les langues disponibles dans tes capacités : détecte "
+                    "automatiquement la langue du message et réponds dans cette même "
+                    "langue, y compris si elle change au milieu de la conversation. "
+                    "Comprends les messages courts, les fautes, l'argot et les translittérations. "
+                    "N'invente pas de faits et protège les informations personnelles."
                 )
             }]
         },
@@ -251,6 +258,85 @@ async def clear_ia_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if user:
         AI_HISTORY.pop(user.id, None)
     await update.effective_message.reply_text("🧠 Mémoire de conversation IA réinitialisée.")
+
+
+
+
+def message_mentions_bot(message, bot_username: str) -> bool:
+    if not bot_username or not message:
+        return False
+    mention = "@" + bot_username.lower()
+    text_value = (message.text or message.caption or "").lower()
+    if mention in text_value:
+        return True
+    if message.reply_to_message and message.reply_to_message.from_user:
+        return message.reply_to_message.from_user.username == bot_username
+    return False
+
+
+async def send_random_sticker(message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not STICKER_SET_NAME:
+        return False
+    try:
+        if not STICKER_CACHE:
+            sticker_set = await context.bot.get_sticker_set(STICKER_SET_NAME)
+            STICKER_CACHE.extend(sticker_set.stickers)
+        if STICKER_CACHE:
+            await message.reply_sticker(random.choice(STICKER_CACHE))
+            return True
+    except Exception:
+        logger.exception("Impossible de charger/envoyer le pack de stickers")
+    return False
+
+
+async def conversational_ai(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+    if not message or not user or not chat or user.is_bot:
+        return
+    private = chat.type == "private"
+    if not private and chat.type not in ("group", "supergroup", "channel"):
+        return
+    if not private and not message_mentions_bot(message, context.bot.username or ""):
+        return
+    if not GEMINI_API_KEY:
+        await message.reply_text("🧛 Mon intelligence artificielle n'est pas encore configurée.")
+        return
+    prompt = (message.text or message.caption or "").strip()
+    if not private:
+        prompt = prompt.replace("@" + (context.bot.username or ""), "").strip()
+    if not prompt and message.reply_to_message and message.reply_to_message.text:
+        prompt = message.reply_to_message.text.strip()
+    if not prompt:
+        await message.reply_text("Je suis là. Écris-moi ta question après m'avoir identifié.")
+        return
+    history_key = chat.id if private else (chat.id * 10_000_000 + user.id)
+    history = AI_HISTORY.setdefault(history_key, [])
+    contents = history[-8:] + [{"role": "user", "parts": [{"text": prompt[:5000]}]}]
+    try:
+        answer = await gemini_generate(contents)
+        history.extend([
+            {"role": "user", "parts": [{"text": prompt[:5000]}]},
+            {"role": "model", "parts": [{"text": answer}]},
+        ])
+        AI_HISTORY[history_key] = history[-8:]
+        await message.reply_text(answer[:4000])
+        if STICKER_CACHE and random.random() < 0.18:
+            await send_random_sticker(message, context)
+    except urllib.error.HTTPError as exc:
+        logger.warning("Gemini HTTP %s", exc.code)
+        await message.reply_text("⚠️ Je rencontre un problème avec mon service IA. Réessaie plus tard.")
+    except Exception:
+        logger.exception("Erreur de conversation IA")
+        await message.reply_text("⚠️ Je n'arrive pas à répondre pour le moment. Réessaie dans un instant.")
+
+
+async def sticker_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not await send_random_sticker(update.effective_message, context):
+        await update.effective_message.reply_text(
+            "Aucun pack de stickers n'est configuré. Ajoute STICKER_SET_NAME dans les variables d'environnement."
+        )
 
 
 
@@ -668,6 +754,7 @@ async def set_bot_commands(app: Application) -> None:
         BotCommand("menu", "Ouvrir le menu principal"),
         BotCommand("help", "Afficher les commandes disponibles"),
         BotCommand("ia", "Parler à l’intelligence artificielle"),
+        BotCommand("sticker", "Recevoir un sticker"),
         BotCommand("clear_ia", "Effacer la mémoire de discussion IA"),
         BotCommand("ping", "Vérifier si le bot est en ligne"),
         BotCommand("id", "Afficher ton identifiant Telegram"),
@@ -698,6 +785,7 @@ def main() -> None:
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("ia", ia_command))
+    app.add_handler(CommandHandler("sticker", sticker_command))
     app.add_handler(CommandHandler("clear_ia", clear_ia_command))
     app.add_handler(CommandHandler("ping", ping))
     app.add_handler(CommandHandler("id", user_id))
@@ -716,6 +804,8 @@ def main() -> None:
     app.add_handler(CommandHandler("proxystats", proxystats_command))
     app.add_handler(CommandHandler("bantemp", bantemp_command))
     app.add_handler(CommandHandler("unban_appeal", unban_appeal_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, conversational_ai))
+    app.add_handler(MessageHandler(filters.CAPTION & ~filters.COMMAND, conversational_ai))
     app.add_handler(CallbackQueryHandler(button_router))
     app.add_error_handler(error_handler)
 
