@@ -8,7 +8,7 @@ from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -564,10 +564,35 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             logger.exception("Impossible d'envoyer le message d'erreur")
 
 
+async def set_bot_commands(app: Application) -> None:
+    """Remplace le menu Telegram par les seules commandes réellement enregistrées."""
+    commands = [
+        BotCommand("start", "Démarrer le bot"),
+        BotCommand("menu", "Ouvrir le menu principal"),
+        BotCommand("help", "Afficher les commandes disponibles"),
+        BotCommand("ping", "Vérifier si le bot est en ligne"),
+        BotCommand("id", "Afficher ton identifiant Telegram"),
+        BotCommand("info", "Informations sur le bot"),
+        BotCommand("rules", "Afficher les règles"),
+        BotCommand("contact", "Contacter le développeur"),
+        BotCommand("admin", "Ouvrir le panneau administrateur"),
+        BotCommand("stats", "Afficher les statistiques"),
+        BotCommand("ban", "Bannir un membre du groupe"),
+        BotCommand("unban_group", "Débannir un membre du groupe"),
+        BotCommand("unban", "Préparer un recours WhatsApp"),
+        BotCommand("massreport", "Simulation narrative de signalement"),
+        BotCommand("banpem", "Simulation narrative"),
+        BotCommand("banperm", "Simulation narrative"),
+        BotCommand("bantemp", "Simulation narrative"),
+        BotCommand("check", "Consulter les informations de statut"),
+    ]
+    await app.bot.set_my_commands(commands)
+
+
 def main() -> None:
     token = get_token()
     db_connect()
-    app = Application.builder().token(token).build()
+    app = Application.builder().token(token).post_init(set_bot_commands).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
